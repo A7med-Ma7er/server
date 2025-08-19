@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<database>
+	<table file_name="Hero.xlsx">
+		<sheet sheet_name="Hero" table_name="game_config_hero">
+			<field col_name="Id" sql_name="heroid" isstring="0"/>
+			<field col_name="sname" sql_name="heroname" isstring="1"/>	
+		</sheet>
+	</table>
+	<table file_name="Item.xlsx">
+		<sheet sheet_name="Item" table_name="game_config_item">
+			<field col_name="ID" sql_name="itemid" isstring="0"/>
+			<field col_name="sname" sql_name="itemname" isstring="1"/>	
+			<field col_name="type" sql_name="itemtype" isstring="0"/>
+		</sheet>
+	</table>
+</database>

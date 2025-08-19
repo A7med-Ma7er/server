@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+	<stat proto="Stat_DeviceRegister"	table_suffix=""					db="1"	log="0" load="0"/>
+	<stat proto="Stat_Register"			table_suffix=""					db="1"	log="0" load="0"/>
+	<stat proto="Stat_Login"			table_suffix=""					db="1"  log="0" load="0"/>
+	<stat proto="Stat_Logout"			table_suffix=""					db="1"  log="0" load="0"/>
+	<stat proto="Stat_OnlineNum"		table_suffix=""					db="1"  log="0" load="0"/>
+	<stat proto="Stat_Charge"			table_suffix=""					db="1"  log="0" load="0"/>
+	<stat proto="Stat_DeviceLogin"		table_suffix=""					db="1"  log="0" load="0"/>
+
+	<stat proto="Stat_PVE"				table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_PVP"				table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_DailyQuest"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_CoinProduce"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_CoinConsume"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_DiamondProduce"	table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_DiamondConsume"	table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_ItemProduce"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_ItemConsume"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_EquipEnhance"		table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_DiamondEnhance"	table_suffix="_{zone}_{date}"	db="0"  log="1" load="1"/>
+
+	<stat proto="Stat_PVEStar"			table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_UserBase"			table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_UserHero"			table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_FirstEquipEnhance" table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_FirstHeroUpgrade"	table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_FirstHeroBreak"	table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_FirstHeroStar"	table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_FirstLoseChapter"	table_suffix="_{zone}"	db="0"  log="1" load="1"/>
+	<stat proto="Stat_UserGameGuide"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserBuildLevelUp"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserTechLevelUp"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserLevelUp"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserRewardMainTask"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserPay"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserArmy"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserPveReward"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserSubActionPotion"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserTakeRes"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserPkValue"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserVipExp"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserAtkMonster"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserSign"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserSecretTask"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserSetArmyOut"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserHeroEx"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserGetVip"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_GuildOccupy"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_GuildBuild"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_UserRace"	table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_Diamond"		table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_Active"		table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+	<stat proto="Stat_Item"			table_suffix="_{zone}"	db="1"  log="1" load="1"/>
+</root>

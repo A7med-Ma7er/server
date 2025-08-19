@@ -1,0 +1,7 @@
+#!/bin/bash
+
+log_dir="/root/stat/log"
+path=$(dirname $0)
+path=${path/\./$(pwd)}
+cur_date=`date +%Y%m%d`
+mkdir -p $log_dir && cd $path && ./load_data.py >> $log_dir/load_data.log.$cur_date
