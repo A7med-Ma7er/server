@@ -1,0 +1,15 @@
+SQL_UP = u"""
+CREATE TABLE Stat_Register(
+	charid INT(10) UNSIGNED NOT NULL,
+	time INT(10) UNSIGNED NOT NULL,
+	acctype INT(10) UNSIGNED NOT NULL,
+	zoneid INT(10) UNSIGNED NOT NULL,
+	deviceid VARCHAR(64),
+	package VARCHAR(255),
+	PRIMARY KEY CharIDKey (charid)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE Stat_Register;
+"""

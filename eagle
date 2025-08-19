@@ -1,0 +1,1512 @@
+#!/usr/bin/env python
+#_*_coding:utf-8_*_
+
+from __future__ import with_statement
+from optparse import OptionParser
+from os import system as sh
+from time import strftime
+import base64, random
+import sys, os, time, commands, re, string
+#import codecs
+
+third_libs = ["3party_lib/mysql",
+        "3party_lib/apr-1",
+        "3party_lib/libxml",
+        "3party_lib/log4cxx",
+        "3party_lib/python2.7",
+        "3party_lib/zlib",
+        "3party_lib/snda",
+        "3party_lib/boost",
+        "3party_lib/protobuf2.3",
+        "3party_lib/tcmalloc",
+        "3party_lib/cryptopp",
+        "3party_lib/curl7.51",
+        "3party_lib/iconv",
+        "3party_lib/libevent",
+        "3party_lib/jsoncpp",
+		"3party_lib/coredump",
+		"3party_lib/liboauth"]
+
+LD_LIBRARY_PATH = ""
+DEVEL_MODE, PRODUCT_MODE = 0, 1
+
+SERVER_NAMES = {"info"    : "InfoServer",
+                "bill"    : "BillServer",
+                "name"    : "NameServer",
+                "super"   : "SuperServer",
+                "record"  : "RecordServer",
+                "session" : "SessionServer",
+                "game"    : "GameServer",
+                "battle"  : "BattleServer",
+                "logdata" : "LogDataServer",
+                "chat"    : "ChatServer",
+                "gate"    : "GatewayServer",
+                "login"   : "LoginServer",
+                "support" : "SupportServer",
+                "stat"    : "StatServer",
+                "mp"      : "MPServer",
+                "testdb"      : "testdb",
+                "test"    : "PerfServer"}
+
+#命令列表,每增加一个功能,除了写对应的函数外,这里也要添加函数名
+cmds = ["help", "start", "restart", "stop", "kill", "shutdown", "reload", "guard", "config", "install", "encrypt", "touch", "debug", "migrate", "server", "zone", "update", "robot"]
+
+class MySQL(object):
+
+    def __init__(self, config=None):
+        self.__mysql_host = config.get("db_host")
+        self.__mysql_user = config.get("db_user")
+        self.__mysql_passwd = config.get("db_password")
+        self.__mysql_db = config.get("db_name")
+        self.__version_table = config.get("db_version_table")
+        if config.get("drop_before_migrate"):
+            self._drop_database()
+
+        self._create_database_if_not_exists()
+        self._create_version_table_if_not_exists()
+
+    def __execute(self, sql, execution_log=None):
+        curr_statement = None
+        for statement in self._parse_sql_statements(sql):
+            curr_statement = statement
+            ret = sh('mysql %s -e"%s"' % (self.__mysql_db, statement.encode('utf-8')))
+            if not cfg.get('ignore_sql_error') and ret != 0:
+                raise Exception("mysql返回值不为0!\n当前执行的sql语句为:%s " % curr_statement.encode('utf-8'))
+            if execution_log:
+                execution_log("%s\n" % statement.encode('utf-8'))
+
+        return execution_log
+
+    def __change_db_version(self, version, up=True):
+        if up:
+            # moving up and storing history
+            sql = 'insert into %s (version) values ("%s");' % (self.__version_table, str(version))
+        else:
+            # moving down and deleting from history
+            sql = 'delete from %s where version >= "%s";' % (self.__version_table, str(version))
+        self.__execute(sql)
+
+    def _parse_sql_statements(self, migration_sql):
+        all_statements = []
+        last_statement = ''
+
+        for statement in migration_sql.split(';'):
+            if len(last_statement) > 0:
+                curr_statement = '%s;%s' % (last_statement, statement)
+            else:
+                curr_statement = statement
+
+            single_quotes = curr_statement.count("'")
+            double_quotes = curr_statement.count('"')
+            left_parenthesis = curr_statement.count('(')
+            right_parenthesis = curr_statement.count(')')
+
+            if single_quotes % 2 == 0 and double_quotes % 2 == 0 and left_parenthesis == right_parenthesis:
+                all_statements.append(curr_statement)
+                last_statement = ''
+            else:
+                last_statement = curr_statement
+
+        return [s.strip() for s in all_statements if s.strip() != ""]
+
+    def _drop_database(self):
+        try:
+            sql = "set foreign_key_checks=0; drop database if exists %s;" % self.__mysql_db
+            sh('mysql -e"%s"' % (sql))
+        except Exception, e:
+            raise Exception("can't drop database '%s'; database doesn't exist" % self.__mysql_db)
+
+    def _create_database_if_not_exists(self):
+        sql = "create database if not exists %s;" % self.__mysql_db
+        sh('mysql -e"%s"' % (sql))
+
+    def _create_version_table_if_not_exists(self):
+        sql = "create table if not exists %s ( version varchar(20) NOT NULL default \"0\" );" % self.__version_table
+        sh('mysql %s -e"%s"' % (self.__mysql_db, sql))
+        sql = "select count(*) from %s;" % self.__version_table
+        count = commands.getoutput('mysql %s -e"%s" -s --skip-column-names' % (self.__mysql_db, sql))
+        try:
+            count = int(count)
+        except:
+            count = 0
+
+        if count == 0:
+            sql = "insert into %s (version) values (\"0\");" % self.__version_table
+            self.__execute(sql)
+
+    def change(self, sql, new_db_version, up=True, execution_log=None):
+        self.__execute(sql, execution_log)
+        self.__change_db_version(new_db_version, up)
+
+    def get_current_schema_version(self):
+        sql = "select version from %s order by version desc limit 0,1;" % self.__version_table
+        version = commands.getoutput('mysql %s -e"%s" -s --skip-column-names' % (self.__mysql_db, sql))
+        return version
+
+    def get_all_schema_versions(self):
+        versions = []
+        sql = "select version from %s order by version;" % self.__version_table
+        versions = commands.getoutput('mysql %s -e"%s" -s --skip-column-names' % (self.__mysql_db, sql))
+        versions = versions.split('\n')
+        versions.sort()
+        return versions
+
+class Migration(object):
+    MIGRATION_FILES_EXTENSION = ".migration"
+    MIGRATION_FILES_MASK = r"[\w_]+[0-9]{14}%s$" % MIGRATION_FILES_EXTENSION
+    TEMPLATE = '#_*_coding:utf-8_*_\nSQL_UP = u"""\n\n"""\n\nSQL_DOWN = u"""\n\n"""'
+
+    def __init__(self, file):
+        file_name = os.path.split(file)[1]
+        if not Migration.is_file_name_valid(file_name):
+            raise Exception('migration文件(%s)名字不合法' % file_name)
+
+        if not os.path.exists(file):
+            raise Exception('migration文件(%s)不存在' % file)
+
+        self.abspath = os.path.abspath(file)
+        self.file_name = file_name
+        b_index = file_name.rfind("_") + 1
+        e_index = file_name.find(".migration")
+        self.version = file_name[b_index:e_index]
+        self.sql_up, self.sql_down = self._get_commands()
+
+    def _get_commands(self):
+        with open(self.abspath, "r") as f:
+            exec(f.read())
+
+        try:
+            (SQL_UP, SQL_DOWN)
+        except NameError:
+            raise Exception("migration文件(%s)格式有误; 没有包含 'SQL_UP' 或 'SQL_DOWN' 定义" % self.abspath)
+
+        if SQL_UP is None or SQL_UP == "":
+            raise Exception("migration命令 'SQL_UP' 是空的 (%s)" % self.abspath)
+
+        if SQL_DOWN is None or SQL_DOWN == "":
+            raise Exception("migration命令 'SQL_DOWN' 是空的 (%s)" % self.abspath)
+
+        return SQL_UP, SQL_DOWN
+
+    def compare_to(self, another_migration):
+        if self.version < another_migration.version:
+            return - 1
+        elif self.version > another_migration.version:
+            return 1
+        return 0
+
+    @staticmethod
+    def sort_migrations_list(migrations, reverse=False):
+        return sorted(migrations, cmp=lambda x, y: x.compare_to(y), reverse=reverse)
+
+    @staticmethod
+    def is_file_name_valid(file_name):
+        match = re.match(Migration.MIGRATION_FILES_MASK, file_name, re.IGNORECASE)
+        return match != None
+
+    @staticmethod
+    def create(migration_name, migration_dir='.'):
+        timestamp = strftime("%Y%m%d%H%M%S")
+        file_name = "%s_%s_%s%s" %  (migration_name, table_name, timestamp, Migration.MIGRATION_FILES_EXTENSION)
+
+        if not Migration.is_file_name_valid(file_name):
+            raise Exception("migration名称不合法 ('%s'); 只允许使用字母数字和下划线" % migration_name)
+
+        new_file_name = "%s/%s" % (migration_dir, file_name)
+
+        try:
+            with open(new_file_name, "w") as f:
+                f.write(Migration.TEMPLATE)
+        except IOError:
+            raise Exception("无法创建文件 ('%s')" % new_file_name)
+
+        return new_file_name
+
+class SimpleDBMigrate(object):
+    def __init__(self, config=None):
+        self._migrations_dir = config.get("migrations_dir")
+
+    def get_all_migrations(self):
+        migrations = []
+
+        for dir in self._migrations_dir:
+            path = os.path.abspath(dir)
+
+            dir_list = None
+            try:
+                dir_list = os.listdir(path)
+            except OSError:
+                raise Exception("找不到文件夹 ('%s')" % path)
+
+            for dir_file in dir_list:
+                if dir_file.endswith(Migration.MIGRATION_FILES_EXTENSION) and Migration.is_file_name_valid(dir_file):
+                    migration = Migration('%s/%s' % (path, dir_file))
+                    migrations.append(migration)
+                    #print ("(%s,%s)" %(path, dir_file))
+
+        if len(migrations) == 0:
+            raise Exception("找不到migration文件")
+
+        return Migration.sort_migrations_list(migrations)
+
+    def get_all_migration_versions(self):
+        return [migration.version for migration in self.get_all_migrations()]
+
+    def get_all_migration_versions_up_to(self, limit_version):
+        return [version for version in self.get_all_migration_versions() if version < limit_version]
+
+    def check_if_version_exists(self, version):
+        return version in self.get_all_migration_versions()
+
+    def latest_version_available(self):
+        all_migrations = self.get_all_migrations()
+        all_migrations = Migration.sort_migrations_list(all_migrations, reverse=True)
+        return all_migrations[0].version
+
+    def get_migration_from_version_number(self, version):
+        migrations = [migration for migration in self.get_all_migrations() if migration.version == version]
+        if len(migrations) > 0:
+            return migrations[0]
+        return None
+
+class Config(object):
+    DB_VERSION_TABLE = "__db_version__"
+    def __init__(self):
+        self._config = {}
+
+    def __repr__(self):
+        return str(self._config)
+
+    def get(self, config_key):
+        try:
+            return self._config[config_key]
+        except KeyError:
+            raise Exception("config键值不合法 ('%s')" % config_key)
+
+    def put(self, config_key, config_value):
+        if config_key in self._config:
+            raise Exception("config键值 '%s' 已存在,不能覆盖!" % config_key)
+        self._config[config_key] = config_value
+
+    def update(self, config_key, config_value):
+        self._config[config_key] = config_value
+
+    def remove(self, config_key):
+        try:
+            del self._config[config_key]
+        except KeyError:
+            raise Exception("config键值不合法 ('%s')" % config_key)
+
+    def _parse_migrations_dir(self, dirs, config_dir=''):
+        abs_dirs = []
+        for dir in dirs.split(':'):
+            if config_dir == '':
+                abs_dirs.append(os.path.abspath(dir))
+            else:
+                abs_dirs.append(os.path.abspath('%s/%s' % (config_dir, dir)))
+        return abs_dirs
+
+class FileConfig(Config):
+    class SettingsFile(object):
+        @staticmethod
+        def import_file(full_filename):
+            path, filename = os.path.split(full_filename)
+            name, extension = os.path.splitext(filename)
+
+            try:
+                # add settings dir from path
+                sys.path.insert(0, path)
+
+                if extension == '.py':
+                    # if is Python, execute as a module
+                    exec "from %s import *" % name
+                else:
+                    # if not, exec the file contents
+                    execfile(full_filename)
+            except IOError:
+                raise Exception("%s: 文件不存在" % full_filename)
+            except Exception, e:
+                raise Exception("配置文件解析失败'%s': %s" % (filename, str(e)))
+            finally:
+                # remove settings dir from path
+                sys.path.remove(path)
+
+            return locals()
+
+    def __init__(self, config_file="eagle.conf"):
+        self._config = {}
+        self.put("db_version_table", self.DB_VERSION_TABLE)
+
+        settings = FileConfig.SettingsFile.import_file(config_file)
+        try:
+            self.put("rev", self.get_variable(settings, 'REV', ''))
+        except:
+            self.put("rev", base64_b64decode("JFJldjogMCAk")) #关于rev 0不能说的秘密。。
+        self.put("db_host", self.get_variable(settings, 'DATABASE_HOST', 'HOST'))
+        self.put("db_port", self.get_variable(settings, 'DATABASE_PORT', 'PORT'))
+        self.put("db_user", self.get_variable(settings, 'DATABASE_USER', 'USERNAME'))
+        pdstr = self.get_variable(settings, 'DATABASE_PASSWORD_EAGLE', 'PASSWORD')
+        if pdstr == "":
+            pdstr = self.get_variable(settings, 'DATABASE_PASSWORD', 'PASSWORD')
+        elif pdstr == "<<askme>>":
+            pass
+        else:
+            pdstr = base64_b64decode(pdstr)
+        self.put("db_password", pdstr)
+        self.put("db_name", self.get_variable(settings, 'DATABASE_NAME', 'DATABASE'))
+        self.put("default_startups", self.get_variable(settings, 'DEFAULT_STARTUPS', ''))
+        self.put("all_startups", self.get_variable(settings, 'ALL_STARTUPS', ''))
+        self.put("config_template", self.get_variable(settings, 'CONFIG_TEMPLATE', ''))
+        self.put("config_values", self.get_variable(settings, 'CONFIG_VALUES', ''))
+        self.put("update_ftp_path", self.get_variable(settings, 'UPDATE_FTP_PATH', ''))
+        self.put("run_mode", self.get_variable(settings, 'EAGLE_RUN_MODE', ''))
+
+        migrations_dir = self.get_variable(settings, 'DATABASE_MIGRATIONS_DIR', 'MIGRATIONS_DIR')
+        #config_dir = os.path.split(config_file)[0]
+        self.put("migrations_dir", self._parse_migrations_dir(migrations_dir, ''))
+
+
+    def get_variable(self, settings, name, old_name):
+        if name in settings or old_name in settings:
+            return settings.get(name, settings.get(old_name))
+        else:
+            raise NameError("config file error: name '%s' is not defined" % name)
+
+    def check_outdate(self, template_conf):
+        if not os.path.exists(template_conf):
+            return False
+        temp_settings = FileConfig.SettingsFile.import_file(template_conf)
+        newest_rev = temp_settings.get("REV", base64_b64decode("JFJldjogMCAk"))
+        newest_rev_no = re.findall(r"\$Rev: (\d+) \$", newest_rev, 0)
+        if newest_rev_no == []: newest_rev_no = ['0']
+        newest_rev_no = int(newest_rev_no[0])
+        current_rev = self.get("rev")
+        current_rev_no = re.findall(r"\$Rev: (\d+) \$", current_rev, 0)
+        if current_rev_no == []: current_rev_no = ['0']
+        current_rev_no = int(current_rev_no[0])
+        return newest_rev_no > current_rev_no
+
+class InPlaceConfig(Config):
+    def __init__(self, db_host, db_user, db_password, db_name, migrations_dir, db_version_table=''):
+        if not db_version_table or db_version_table == '':
+            db_version_table = self.DB_VERSION_TABLE
+        self._config = {
+            "db_host": db_host,
+            "db_user": db_user,
+            "db_password": db_password,
+            "db_name": db_name,
+            "db_version_table": db_version_table,
+            "migrations_dir": self._parse_migrations_dir(migrations_dir)
+        }
+
+
+def base64_b64decode(data):
+    missing_padding = 4 - len(data) % 4
+    if missing_padding:
+        data += b'='* missing_padding
+    return base64.decodestring(data)
+
+
+def flatten(list):
+    result = []
+    for item in list:
+        if hasattr(item, "__iter__") and not isinstance(item, basestring):
+            result.extend(flatten(item))
+        else:
+            result.append(item)
+    return result
+
+def get_pids(name):
+    if name in SERVER_NAMES:
+        pids = commands.getoutput("pgrep %s -u%s" % (SERVER_NAMES[name], os.environ['USER']))
+        if pids == "": return None
+        pids = pids.split('\n')
+        return pids
+    else:
+        pattern = re.compile("(game|gate)(\d+)", re.IGNORECASE)
+        result = pattern.match(name)
+        if result is None: return None
+        server, serverid = result.group(1), int(result.group(2))
+        pids = commands.getoutput("pgrep %s -u%s" % (SERVER_NAMES[server], os.environ['USER']))
+        if pids == "": return None
+        pids = pids.split('\n')
+        pidfile = "%s/.eagle/%s%d.pid" % (os.environ["HOME"], string.lower(SERVER_NAMES[server]), serverid)
+        try:
+            with open(pidfile) as f:
+                pid = int(f.read())
+            if str(pid) not in pids:
+                return None
+        except:
+            return None
+        return [pid]
+
+def get_lazy_cmd(cmd_name):
+    if cmd_name in cmds: return cmd_name
+    lazy_cmds = [cmd for cmd in cmds if cmd.startswith(cmd_name)]
+    if lazy_cmds == []:
+        print "匹配不到命令:%s" % cmd_name
+        return None
+    if len(lazy_cmds) > 1:
+        print "命令不能唯一匹配：", lazy_cmds
+        return None
+    return lazy_cmds[0]
+
+def get_db_passwd():
+    from getpass import getpass
+    if cfg.get('db_password') == '<<askme>>':
+        print '请输入数据库帐户"%s@%s"的密码' % (cfg.get('db_user'), cfg.get('db_host'))
+        passwd = getpass()
+        cfg.update('db_password', passwd)
+
+def raw_default(prompt, default=None, loop=False):
+    """带默认值的raw_input"""
+    if default:
+        prompt = "%s [%s]" % (prompt, default)
+
+    if not prompt.endswith(":"): prompt += ":"
+    while True:
+        result = raw_input(prompt)
+        if not result and default:
+            return default
+        if not result and loop:
+            continue
+        return result
+
+def get_ip_address(ifname):
+    import socket, fcntl, struct
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', ifname[:15]))[20:24])
+
+def try_to_gen_config():
+    if os.path.exists("config.xml"): return
+    #confirm = raw_default("当前目录下找不到config.xml,是否生成默认配置？", "y")
+    #if string.lower(confirm) != "y": return
+    sh("./eagle config > config.xml")
+
+def usage(option, opt, value, parser):
+    parser.print_help()
+    print "Arguments:"
+    for item in cmds:
+        cmd_help = eval("%s.__doc__" % item)
+        print cmd_help.split("\n")[0]
+    sys.exit(0)
+
+
+def get_server_command(name, deamon=True):
+    if name not in SERVER_NAMES: return None
+    server_name = SERVER_NAMES[name]
+    if cfg.get("run_mode") == DEVEL_MODE:
+        return "./bin/%s %s" % (server_name, "-d" if deamon else "")
+    elif cfg.get("run_mode") == PRODUCT_MODE:
+        return "./%s %s" % (server_name, "-d" if deamon else "")
+
+
+def init_run_mode():
+    if cfg.get("run_mode") == DEVEL_MODE:
+        print "当前为: 开发模式"
+        #print "lib路径: ./3party_lib"
+        #LD_LIBRARY_PATH = ":".join("./%s" % item for item in third_libs)
+    else:
+        print "当前为: 产品模式"
+        #print "lib路径: %s/.eagle/3party_lib" % os.environ["HOME"]
+        #LD_LIBRARY_PATH = ":".join("%s/.eagle/%s" % (os.environ["HOME"], item) for item in third_libs)
+    #os.environ['LD_LIBRARY_PATH'] = LD_LIBRARY_PATH
+    #print "LD_LIBRARY_PATH=", LD_LIBRARY_PATH
+
+    LD_LIBRARY_PATH = ":".join("%s/.eagle/%s" % (os.environ["HOME"], item) for item in third_libs)
+    os.environ['LD_LIBRARY_PATH'] = LD_LIBRARY_PATH
+    print "LD_LIBRARY_PATH=", LD_LIBRARY_PATH
+
+
+def help(argv):
+    """
+    help\t\thelp cmd显示命令的详细帮助
+    ./eagle help restart (显示restart的详细帮助信息)
+    """
+    if argv == []:
+        cmd_list = cmds[:]
+    elif argv[0] in cmds:
+        cmd_list = [cmds[cmds.index(argv[0])]]
+    else:
+        cmd_list = ["help"]
+    for cmd in cmd_list:
+        cmd_help = eval("%s.__doc__" % cmd)
+        print cmd_help
+
+
+def start(argv):
+    """
+    start\t\t启动服务
+    ./eagle start (启动默认服务)
+    ./eagle start all (启动所有服务)
+    ./eagle start info login (启动info和login两个服务)
+    ./eagle start name(启动NameServer服务)
+    ./eagle start game*8 gate*3 (启动8个场景3个网关)
+    ./eagle start game*3 --guard (以守护方式启动服务)
+    """
+    def _wait_for_super():
+        pidfile = "%s/.eagle/superserver.pid" % os.environ["HOME"]
+        sh("touch %s" % pidfile)
+        flag = True
+        while True:
+            with open(pidfile) as f:
+                try:
+                    pid1 = int(f.read())
+                except:
+                    pid1 = -1
+            pid2 = get_pids("super")
+            if pid2 is None:
+                print "SuperServer服务启动失败！"
+                sys.exit(1)
+            if len(pid2) > 1:
+                print "系统中已存在SuperServer进程实例!"
+                print "先运行./eagle stop all"
+                sys.exit(1)
+            pid2 = int(pid2[0])
+            if pid1 == pid2:
+                sys.stdout.write("\nSuperServer初始化完毕!\n")
+                break
+            else:
+                if flag:
+                    sys.stdout.write("等待SuperServer初始化.")
+                    flag = False
+                else:
+                    sys.stdout.write(".")
+                sys.stdout.flush()
+                time.sleep(1)
+
+    def _do_start(target):
+        for item in flatten(target):
+            if cfg.get("guard_mode"):
+                print "守护方式启动服务%s..." % item
+                sh("nohup ./guard.py %s &" % get_server_command(item, False))
+            else:
+                print "启动服务%s..." % SERVER_NAMES[item]
+                sh(get_server_command(item))
+            if item == "super":
+                _wait_for_super()
+                time.sleep(5)
+            time.sleep(2)
+
+    init_run_mode()
+    try_to_gen_config()
+    default_startups = cfg.get("default_startups")
+    all_startups = cfg.get("all_startups")
+
+    (ulimit_return, ulimit_value) = commands.getstatusoutput("ulimit -c")
+    if ulimit_value != 'unlimited':
+        print "core文件大小有问题啊!!"
+        sys.exit(1)
+
+    if len(argv) == 0:
+        print "启动目标未提供,使用默认值:", default_startups
+        _do_start(default_startups)
+    elif len(argv) == 1 and argv[0] == "all":
+        print "启动所有服务:", all_startups
+        _do_start(all_startups)
+    elif len(argv) == 2 and argv[0] == "game" and argv[1] == "save":
+        print "启动game服务..."
+	startups = []
+	startups.append('game')
+        _do_start(startups)
+    else:
+        startups = []
+        for item in argv:
+            if item in SERVER_NAMES:
+                startups.append(item)
+            else:
+                sp = item.split('*')
+                if len(sp) == 2:
+                    server, count = sp
+                    count = int(count)
+
+                    if server in SERVER_NAMES and isinstance(count, int) and count in range(1, 17):
+                        startups.append([server] * count)
+                    else:
+                        print "启动目标%s不合法！" % item
+                        return
+                else:
+                    print "启动目标%s不合法！" % item
+                    return
+        _do_start(startups)
+
+
+def restart(argv):
+    """
+    restart\t重启服务
+    ./eagle restart (重启默认服务)
+    ./eagle restart all (重启所有服务)
+    ./eagle restart info login (重启info和login)
+    """
+    stop(argv)
+    time.sleep(3)
+    start(argv)
+
+
+def stop(argv, force=False):
+    """
+    stop\t\t发送kill -2信号给进程
+    ./eagle stop (关闭默认服务)
+    ./eagle stop all (关闭所有服务)
+    ./eagle stop info login (关闭info和login)
+    """
+    def _wait_stop(pid, name):
+        flag = True
+        while True:
+            pids = get_pids(name)
+            if pids is None:
+                sys.stdout.write("\n")
+                break
+            if pid not in pids:
+                sys.stdout.write("\n")
+                break
+            else:
+                if flag:
+                    flag = False
+                    sys.stdout.write("等待%s进程退出." % name)
+                else:
+                    sys.stdout.write(".")
+                sys.stdout.flush()
+                time.sleep(1)
+
+    def unique_list( seq ):
+        unique = []
+        [unique.append(i) for i in seq if not unique.count(i)]
+        return unique
+
+    def _do_stop(names, force):
+	for item in unique_list(flatten(names)):
+            pids = get_pids(item)
+            if pids is None: continue
+            for pid in pids:
+                if force:
+                    sh("kill -9 %s" % pid)
+                else:
+                    sh("kill -2 %s" % pid)
+                _wait_stop(pid, item)
+
+    def _do_save_stop( names ):
+        pids = get_pids(names)
+	if pids is None:
+	    print "找不到GameServer的pid，检查进程是否存在!"
+            return
+    	pid = int(pids[0])
+	sh("kill -15 %s" % pid)
+	_wait_stop(pid, names)
+
+    default_startups = cfg.get("default_startups")
+    all_startups = cfg.get("all_startups")
+    if len(argv) == 0:
+        print "停止目标未提供,使用默认值:", default_startups
+        _do_stop(default_startups[::-1], force)
+    elif len(argv) == 1 and argv[0] == "all":
+        print "停止所有服务:", all_startups
+        _do_stop(all_startups[::-1], force)
+    elif len(argv) == 2 and argv[0] == "game" and argv[1] == "save":
+        print "停止gameserver并保存数据"
+        _do_save_stop(argv[0])
+    else:
+        _do_stop(argv, force)
+
+
+def kill(argv):
+    """
+    kill\t\t发送kill -9信号给进程
+   用法同stop
+    """
+    stop(argv, True)
+
+
+def shutdown(argv):
+    """
+    shutdown\t发送关闭游戏区信号给SuperServer
+    ./eagle shutdown 0 60 (60秒后关闭全区)
+    ./eagle shutdown 6 60 (60秒后关闭id为6的场景)
+    ./eagle shutdown cancel (取消关服)
+    """
+    import signal
+    from ctypes import Union, cdll, c_int, c_void_p
+
+    class sigval(Union):
+        _fields_ = [("sival_int", c_int), ("sival_ptr", c_void_p)]
+
+    c = cdll.LoadLibrary("libc.so.6")
+    value = sigval()
+    pids = get_pids("super")
+    if pids is None:
+        print "找不到SuperServer的pid，检查进程是否存在!"
+        return
+    pid = int(pids[0])
+
+    if argv[0] == "cancel":
+        ret = c.sigqueue(pid, signal.SIGUSR2, value)
+        print "发送取消关闭游戏区信号成功！" if ret == 0 else "发送取消关闭游戏区信号失败！"
+        return
+
+    try:
+        sceneid = int(argv[0])
+    except:
+        print "sceneid必须为整数！"
+        return
+
+    try:
+        seconds = int(argv[1])
+    except:
+        print "seconds必须为整数!"
+        return
+
+    value.sival_int = sceneid << 16 | seconds
+    ret = c.sigqueue(pid, signal.SIGUSR1, value)
+    print "发送关闭游戏区信号成功！" if ret == 0 else "发送关闭游戏区信号失败！"
+
+
+def reload(argv):
+    """
+    reload\t发送kill -HUP信号给进程
+    ./eagle reload scene (重载场景脚本及配置)
+    """
+    for item in argv:
+        pids = get_pids(item)
+        if pids is None:
+            print "找不到服务%s" % item
+            continue
+        for pid in pids:
+            sh("kill -HUP %s" % pid)
+            print "刷新服务%s成功!" % item
+
+
+def guard(argv):
+    """
+    guard\t\t守护启动进程，同start --guard
+    ./eagle guard scene*3 gate*2 (以守护方式运行3个场景2个网关)
+    """
+    cfg.update("guard_mode", True)
+    start(argv)
+
+
+def config(argv):
+    """
+    config\t生成服务器配置信息
+    ./eagle config (生成默认服务的配置)
+    ./eagle config all (生成所有服务的配置)
+    ./eagle config info login (生成info和login的配置)
+    ##小提示:vim ~/.eagle/eagle.conf 或./eagle.conf可修改所有配置的默认值
+    """
+    config_template = cfg.get("config_template")
+    config_values = cfg.get("config_values")
+    default_startups = cfg.get("default_startups")
+    all_startups = cfg.get("all_startups")
+    if len(argv) == 0:
+        result = config_template["global"] % config_values
+        for item in set(flatten(default_startups)):
+            if item in config_template:
+                 result += config_template[item] % config_values
+        print """<?xml version="1.0" encoding="utf-8"?>
+<Eagle>
+%s
+</Eagle>""" % result
+    elif len(argv) == 1 and argv[0] == "all":
+        result = config_template["global"] % config_values
+        for item in set(flatten(all_startups)):
+            result += config_template[item] % config_values
+        print """<?xml version="1.0" encoding="utf-8"?>
+<Eagle>
+%s
+</Eagle>""" % result
+    else:
+        result = config_template["global"] % config_values
+        for item in argv:
+            if item in SERVER_NAMES:
+                result += config_template[item] % config_values
+
+        print """<?xml version="1.0" encoding="utf-8"?>
+<Eagle>
+%s
+</Eagle>""" % result
+
+
+def install(argv):
+    """
+    install\t安装gz包
+    ./eagle install lib eagle-lib.tar.gz (安装eagle-lib.tar.gz到~/.eagle目录下)
+    ./eagle install res eagle-res.tar.gz (安装eagle-res.tar.gz到当前目录下)
+    ./eagle install res ftp://192.168.0.202/eagle-res.tar.gz (下载并且安装eagle-res.tar.gz到当前目录下)
+    """
+    def _get_file(url):
+        import urlparse
+        if url.startswith("http://") or url.startswith("ftp://"):
+            local_file = urlparse.urlparse(url)[2].rsplit("/", 1)
+            if len(local_file) == 2:
+                local_file = local_file[1]
+            else:
+                local_file = local_file[0]
+            if sh("wget %s" % url) == 0:
+                return local_file, True
+            else:
+                raise "下载文件%s失败" % url
+        else:
+            return url, False
+
+    if len(argv) != 2: return
+    if argv[0] == "lib":
+        file_name, need_remove = _get_file(argv[1])
+        sh("mkdir -pv %s/.eagle" % os.environ["HOME"])
+        lib_path = os.path.abspath(file_name)
+        if sh("tar zxvf %s -C %s/.eagle/" % (lib_path, os.environ["HOME"])) == 0:
+            print "成功安装%s到~/.eagle/目录下" % lib_path
+        if need_remove: sh("rm -f %s" % lib_path)
+    elif argv[0] == "res":
+        file_name, need_remove = _get_file(argv[1])
+        if sh("tar zxvf %s" % file_name) == 0:
+            print "成功安装%s到当前目录下" % file_name
+        if need_remove: sh("rm -f %s" % file_name)
+    elif argv[0] in ["platform", "release"]:
+        if os.path.exists("%s.ver" % argv[0]):
+            sh("mkdir -pv ../`cat %s.ver`" % argv[0])
+            sh("mv -f * ../`cat %s.ver`" % argv[0])
+        file_name, need_remove = _get_file(argv[1])
+        print file_name, need_remove
+        if sh("tar zxvf %s -C .." % file_name) == 0:
+            print "成功安装%s到%s目录下" % (file_name, argv[0])
+        if need_remove: sh("rm -f %s" % file_name)
+
+def encrypt(argv):
+    """
+    encrypt\t加密mysql url
+    ./eagle encrypt mysql://localhost (加密字符串)
+    """
+    init_run_mode()
+    if len(argv) != 1: print "参数错误!";return
+    if not os.path.exists("./encryptUrl"): print "当前目录下找不到encryptUrl";return
+    sh("./encryptUrl %s" % argv[0])
+
+
+def touch(argv):
+    """
+    touch\t\t快速遍历目录touch
+    ./eagle touch (遍历当前目录touch)
+    """
+    if len(argv) == 0:
+        depth = 0
+        for root, dirs, files in os.walk("."):
+            if ".svn" in dirs: dirs.remove(".svn")
+            if root.count("/") > depth: depth = root.count("/")
+        for i in range(depth):
+            sh("touch %s" % ("*/" * i + "*"))
+    else:
+        print "touch参数错误!"
+
+def debug(argv):
+    """
+    debug\t\t调试进程
+    ./eagle debug scene1 (调试场景进程1)
+    ./eagle debug login --restart (启动login进程以便调试)
+    """
+    cfg.update("run_mode", DEVEL_MODE)
+    all_startups = cfg.get("all_startups")
+    default_startups = cfg.get("default_startups")
+    if len(argv) != 1:
+        print "debug参数错误!"
+        return
+    if cfg.get("run_for_debug"):
+        if argv[0] in all_startups[1:3]:
+            idx = all_startups.index(argv[0])
+            stop(["all"])
+            start(all_startups[:idx])
+            sh("gdb %s" % get_server_command(argv[0], False))
+        elif argv[0] in flatten(default_startups):
+            stop(["all"])
+            start(all_startups[:3])
+            idx = flatten(default_startups).index(argv[0])
+            start(default_startups[:idx])
+            sh("gdb %s" % get_server_command(argv[0], False))
+        else:
+            print "无法调试程序%s" % argv[0]
+    else:
+        pids = get_pids(argv[0])
+        if pids is None:
+            print "找不到%s进程" % argv[0]
+            return
+        sh("gdb -p %s" % pids[0])
+
+def migrate(argv):
+    """
+    migrate\t数据库脚本升级
+    ./eagle migrate new (创建新的数据库升级脚本)
+    ./eagle migrate update (升级数据库)
+    ./eagle migrate sql (只显示升级的sql而不执行更新)
+    """
+    def subtract(list_a, list_b):
+        return [l for l in list_a if l not in list_b]
+
+    def get_destination_version():
+        destination_version = cfg.get("to_migration")
+        if destination_version is None:
+            destination_version = db_migrate.latest_version_available()
+
+        if destination_version is not '0' and not db_migrate.check_if_version_exists(destination_version):
+            raise Exception("找不到版本 (%s)" % destination_version)
+
+        return destination_version
+
+    def get_migration_files_to_be_executed(current_version, destination_version):
+        mysql_versions = mysql.get_all_schema_versions()
+        migration_versions = db_migrate.get_all_migration_versions()
+
+        # 升级
+        if current_version <= destination_version:
+            remaining_versions_to_execute = subtract(migration_versions, mysql_versions)
+            remaining_versions_to_execute = [version for version in remaining_versions_to_execute if version <= destination_version]
+            return remaining_versions_to_execute
+
+        # 回滚
+        down_versions = [version for version in mysql_versions if version <= current_version and version > destination_version]
+        for version in down_versions:
+            if version not in migration_versions:
+                raise Exception("impossible to migrate down: one of the versions was not found (%s)" % version)
+        down_versions.reverse()
+        return down_versions
+
+    def execute_migrations(current_version, destination_version, is_migration_up):
+        versions_to_be_executed = get_migration_files_to_be_executed(current_version, destination_version)
+
+        if versions_to_be_executed is None or len(versions_to_be_executed) == 0:
+            print "数据库不需要更新.\n"
+            return
+
+        #input = raw_default("数据库需要更新，是否继续？", "y")
+        #if string.lower(input) !='y':
+        #    return 1
+        up_down_label = is_migration_up and "升级" or "回滚"
+        print "开始执行数据库 脚本%s!" % up_down_label
+
+        sql_statements_executed = []
+        for migration_version in versions_to_be_executed:
+            migration = db_migrate.get_migration_from_version_number(migration_version)
+            sql = is_migration_up and migration.sql_up or migration.sql_down
+
+            if not cfg.get("show_sql_only"):
+                print "===== 正在执行数据库脚本 %s (%s) =====" % (migration.file_name, up_down_label)
+
+                mysql.change(sql, migration_version, is_migration_up, execution_log=sys.stdout.write)
+
+                if cfg.get("pause_migrate"):
+                    raw_input("按 Enter键继续... ")
+
+            sql_statements_executed.append(sql)
+
+        if cfg.get("show_sql_only"):
+            print "__________________ SQL语句 __________________"
+            for sql in sql_statements_executed:
+                print sql
+            print "_____________________________________________"
+
+    if argv == [] or (argv !=[] and argv[0] not in ["new", "update", "sql"]):
+        help(["migrate"])
+        return 0
+
+    if argv[0] == "new":
+        mig_name = raw_default("请输入升级脚本的名字(英文小写，下划线分隔)", None, True)
+        new_file = Migration.create(mig_name, cfg.get("migrations_dir")[0])
+        print "成功创建文件%s" % new_file
+    elif argv[0] in ["update", "sql"]:
+        if argv[0] == "sql":
+            cfg.update("show_sql_only", True)
+
+        get_db_passwd()
+        mysql = MySQL(cfg)
+        db_migrate = SimpleDBMigrate(cfg)
+        destination_version = get_destination_version()
+        current_version = mysql.get_current_schema_version()
+
+        print "当前数据库版本为: %s" % current_version
+        print "目标数据库版本为: %s" % destination_version
+
+        
+
+        is_migration_up = True
+        print current_version
+        if int(current_version) > int(destination_version):
+       	    is_migration_up = False
+
+        
+        execute_migrations(current_version, destination_version, is_migration_up)
+        #execute_migrations(current_version, destination_version, False)
+
+def server(argv):
+    """
+    server\tServerList数据表维护
+    ./eagle server add (添加新的服务器)
+    ./eagle server list (查看服务器列表)
+    ./eagle server remove (删除服务器)
+    ./eagle server edit (修改服务器)
+    ./eagle server init (初始化ServerList表)
+    ./eagle server redis (初始化RedisList表)
+    """
+    if argv == []:
+        help(["server"])
+        return 0
+    server_action = argv[0]
+    if server_action in ["add", "list", "remove", "edit", "init", "redis"]:
+        get_db_passwd()
+    else:
+        help(["server"])
+        return 1
+    if server_action == "list":
+        sql = "select * from ServerList;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+    elif server_action == "add":
+        server_name = raw_default("输入服务器名字(SERVERNAME)", None, True)
+        server_type = raw_default("输入服务器类型(SERVERTYPE)", "6")
+        server_ip = raw_default("输入服务器IP(IP)", get_ip_address(cfg.get("config_values")["ifname"]))
+        server_port = raw_default("输入服务器端口(PORT)", None, True)
+        server_extip = raw_default("输入服务器外部IP(EXTIP)", server_ip)
+        server_extport = raw_default("输入服务器外部端口(EXTPORT)", server_port)
+        try:
+            sql = """
+                    insert ServerList(ID, SERVERNAME, SERVERTYPE, IP, PORT, EXTIP, EXTPORT, GATEWAYTYPE)
+                    values((select tbl.id from (select max(ID)+1 as id from ServerList) as tbl), '%s', %d, '%s', %d, '%s', %d)
+                  """ % (server_name, int(server_type), server_ip, int(server_port), server_extip, int(server_extport))
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        server(["list"])
+    elif server_action == "remove":
+        server(["list"])
+        server_id = raw_default("输入要删除的服务器ID", None, True)
+        try:
+            if (int(server_id) == 0) :
+                sql = "delete from ServerList"
+            else:
+                sql = "delete from ServerList where ID = %d;" % int(server_id)
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        server(["list"])
+    elif server_action == "edit":
+        server(["list"])
+        server_id = raw_default("输入要修改的服务器ID", None, True)
+        server_name = raw_default("输入服务器名字(SERVERNAME)", None, True)
+        server_type = raw_default("输入服务器类型(SERVERTYPE)", "6")
+        server_ip = raw_default("输入服务器IP(IP)", get_ip_address(cfg.get("config_values")["ifname"]))
+        server_port = raw_default("输入服务器端口(PORT)", None, True)
+        server_extip = raw_default("输入服务器外部IP(EXTIP)", server_ip)
+        server_extport = raw_default("输入服务器外部端口(EXTPORT)", server_port)
+        try:
+            sql = """
+                    update ServerList set SERVERNAME = '%s', SERVERTYPE = %d, IP = '%s', PORT = %d, EXTIP = '%s', EXTPORT = %d
+                    where ID = %d
+                  """ % (server_name, int(server_type), server_ip, int(server_port), server_extip, int(server_extport), int(server_id))
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        server(["list"])
+    elif server_action == "init":
+        sqlstr = 'mysql %s -e"select count(1) from ServerList;" -s --skip-column-names' % (cfg.get("db_name"))
+        print sqlstr
+        #raw_count = commands.getoutput('mysql -h%s -u%s -p"%s" %s -e"select count(1) from ServerList;" -s --skip-column-names' % (cfg.get("db_host"), cfg.get("db_user"), cfg.get("db_password"), cfg.get("db_name")))
+        raw_count = commands.getoutput(sqlstr)
+        print raw_count
+        if raw_count != "0":
+            print "ServerList有%s条记录，直接返回！" % raw_count
+            return 1
+            #input = raw_default("ServerList有%s条记录，初始化会清空该表原有数据，是否继续？" % raw_count, "y")
+            #if string.lower(input) !='y':
+            #    return 1
+        # 内网网ip
+        ip_local = get_ip_address(cfg.get("config_values")["ifname"])
+        ip_net = ip_local
+        if cfg.get("config_values")["netip"] != "" and cfg.get("run_mode") == PRODUCT_MODE:
+            ip_net = cfg.get("config_values")["netip"]
+
+        sql = u"""
+            TRUNCATE TABLE ServerList;
+            INSERT INTO ServerList (ID, SERVERNAME, SERVERTYPE, IP, PORT, NETIP, NETPORT, PARA) VALUES
+            (1,'super',1,'%(ip_address)s',30000,'%(ip_address)s',30000,0),
+            (2,'record',3,'%(ip_address)s',30002,'%(ip_address)s',30002,0),
+            (3,'session',5,'%(ip_address)s',30004,'%(ip_address)s',30004,0),
+            (5,'scene',6,'%(ip_address)s',30005,'%(ip_address)s',30005,0),
+            (8,'logdata',10,'%(ip_address)s',30008,'%(ip_address)s',30008,0),
+            (11,'battle1', 9,'%(ip_address)s',30011,'%(ip_address)s',30011,0),
+            (12,'battle2',9,'%(ip_address)s',30012,'%(ip_address)s',30012,0),
+            (20,'gate1',7,'%(ip_address)s',30020,'%(net_ip_address)s',30020,0),
+            (21,'gate2',7,'%(ip_address)s',30021,'%(net_ip_address)s',30021,0),
+            (30,'chat',8,'%(ip_address)s',30030,'%(ip_address)s',30030,0)
+            """.encode('utf-8') % {"ip_address" : ip_local, "net_ip_address" : ip_net}
+        #print sql
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+
+	server(["list"])
+
+    elif server_action == "redis":
+        sqlstr = 'mysql %s -e"select count(1) from RedisList;" -s --skip-column-names' % (cfg.get("db_name"))
+        print sqlstr
+        raw_count = commands.getoutput(sqlstr)
+        print raw_count
+        if raw_count != "0":
+            print "RedisList有%s条记录，直接返回！" % raw_count
+            return 1
+            #input = raw_default("ServerList有%s条记录，初始化会清空该表原有数据，是否继续？" % raw_count, "y")
+            #if string.lower(input) !='y':
+            #    return 1
+        # 内网网ip
+        ip_local = get_ip_address(cfg.get("config_values")["ifname"])
+        ip_net = ip_local
+        if cfg.get("config_values")["netip"] != "" and cfg.get("run_mode") == PRODUCT_MODE:
+            ip_net = cfg.get("config_values")["netip"]
+
+	sql = u"""
+            TRUNCATE TABLE RedisList;
+            INSERT INTO RedisList (ID, NAME, TYPE, IP, PORT, PARA) VALUES
+            (1,'index',1,'127.0.0.1',6380,0),
+            (201,'usercache',2,'127.0.0.1',6381,0),
+            (202,'usercache',2,'127.0.0.1',6382,0),
+            (301,'rank',3,'127.0.0.1',6383,0),
+            (401,'offinecache',4,'127.0.0.1',6384,0),
+            (501,'scenecontent',5,'127.0.0.1',6385,0),
+	    (601,'moba',6,'127.0.0.1',6386,0)
+            """.encode('utf-8') % {"ip_address" : ip_local, "net_ip_address" : ip_net}
+        #print sql
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+	server(["list"])
+
+
+def zone(argv):
+    """
+    zone\t\tZoneInfo数据表维护
+    ./eagle zone add (添加新的区)
+    ./eagle zone list (查看区列表)
+    ./eagle zone remove (删除游戏区)
+    ./eagle zone edit (修改游戏区)
+    """
+    if argv == []:
+        help(["zone"])
+        return 0
+    zone_action = argv[0]
+    if zone_action in ["add", "list", "remove", "edit"]:
+        get_db_passwd()
+    else:
+        help(["zone"])
+        return 1
+    if zone_action == "list":
+        sql = "select * from ZONELIST;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+    elif zone_action == "add":
+        zone_id = raw_default("输入区ID(ZONEID)", None, True)
+        zone_type = raw_default("输入区类型(ZONETYPE)","1")
+        zone_name = raw_default("输入区名称(ZONENAME)", None, True)
+        zone_ip = raw_default("输入区IP(ZONEIP)", get_ip_address(cfg.get("config_values")["ifname"]))
+        zone_port = raw_default("输入区端口(ZONEPORT)", "20000", True)
+        try:
+            sql = """
+                    insert ZONELIST(ZONEID, ZONETYPE, ZONENAME, ZONEIP, ZONEPORT)
+                    values('%d', '%d', '%s', '%s', %d)
+                  """ % (int(zone_id), int(zone_type), zone_name, zone_ip, int(zone_port))
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        zone(["list"])
+    elif zone_action == "remove":
+        zone(["list"])
+        zone_id = raw_default("输入要删除的区ID", None, True)
+        try:
+            sql = "delete from ZONELIST where ZONEID = %d;" % int(zone_id)
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s "%s"' % (cfg.get("db_name"), sql))
+        zone(["list"])
+    elif zone_action == "edit":
+        zone(["list"])
+        zone_id = raw_default("输入要修改的区ID", None, True)
+        zone_type = raw_default("输入区类型(ZONETYPE)","1")
+        zone_name = raw_default("输入区名称(ZONENAME)", None, True)
+        zone_ip = raw_default("输入区IP(ZONEIP)", get_ip_address(cfg.get("config_values")["ifname"]))
+        zone_port = raw_default("输入区端口(ZONEPORT)", None, True)
+        try:
+            sql = """
+                    update ZONELIST set ZONETYPE = %d, ZONENAME = '%s', ZONEIP = '%s', ZONEPORT = %d
+                    where ZONEID = %d
+                  """ % (int(zone_type), zone_name, zone_ip, int(zone_port), int(zone_id))
+        except:
+            print "输入有误导致类型转换出错!"
+            return 1
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        zone(["list"])
+
+update_log = ""
+
+def robot(argv):
+    """
+    ./eagle robot clear  清除机器人数据
+    ./eagle robot init   导入机器人数据
+    """
+    if argv == []:
+        help(["robot"])
+        return 0
+    robot_action = argv[0]
+    if robot_action in ["list", "count", "clear", "init"]:
+        get_db_passwd()
+    else:
+        help(["robot"])
+        return 1
+    if robot_action == "list":
+        sql = "select acctype, accid, charid, charname, level, pkvalue from CharacterBase WHERE charid < 10000"
+        sh('mysql %s --default-character-set=utf8 -e"%s"' % (cfg.get("db_name"), sql))
+    elif robot_action == "count":
+        sql = "select count(*) from CharacterBase WHERE charid < 10000;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+    elif robot_action == "clear":
+        sql = "DELETE FROM CharacterBase WHERE charid < 10000;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        sql = "DELETE FROM CharacterName WHERE charid < 10000;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        sql = "DELETE FROM UserArenaOrder;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        sql = "DELETE FROM RankDB where ranktype=2 OR ranktype=5;"
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        robot(["list"])
+        robot(["count"])
+    elif robot_action == "init":
+        sqlstr = 'mysql %s -e"select count(1) from CharacterBase WHERE charid < 10000;" -s --skip-column-names' % (cfg.get("db_name"))
+        print sqlstr
+        raw_count = commands.getoutput(sqlstr)
+        print raw_count
+        if raw_count != "0":
+            print "有机器人数据,%s条，直接返回！" % raw_count
+            return 1
+        sql = "source ./RobotScript/user.sql; source ./RobotScript/name.sql; source ./RobotScript/order.sql; source ./RobotScript/superpvp.sql;";
+        sh('mysql %s -e"%s"' % (cfg.get("db_name"), sql))
+        robot(["count"])
+
+
+def update(argv):
+    """
+    update\t运维版本更新
+    ./eagle update (若在platform或release目录下，会自动更新)
+    ./eagle update platform ver (自动更新platform包到ver版本，格式0.0.9, new表示最新版本)
+    ./eagle update release ver (自动更新release包到ver版本, 格式0.0.9, new表示最新版本)
+    ./eagle update lib ver(自动更新lib包到ver版本, 格式0.0.9, new表示最新版本)
+    ./eagle update res ver(自动更新res包到ver版本, 格式0.0.9, new表示最新版本)
+    """
+    def _get_ftp_filelist():
+        from urlparse import urlparse
+        from ftplib import FTP
+        url = urlparse(cfg.get("update_ftp_path"))
+        ftp_user = url.username
+        ftp_pass = url.password
+        ftp_server = url.hostname
+        if url.port:
+            ftp_server = "%s:%d" % (ftp_server, url.port)
+        ftp_path = url.path
+        try:
+            ftp = FTP(ftp_server)
+            ftp.login(ftp_user, ftp_pass)
+            ftp.cwd(ftp_path)
+            filelist = ftp.nlst()
+            ftp.close()
+        except:
+            filelist = None
+        return filelist
+
+    def _get_ver_no(verstr):
+        result = re.match(r".*-?(\d+)\.(\d+)\.(\d+)-?.*", verstr, re.IGNORECASE)
+        if not result: return "0.0.0"
+        ver_no = "%s.%s.%s" % result.groups()
+        return ver_no
+
+    def _check_update(package, define_ver):
+        """检查某个包是否需要更新
+        @return: None if no updates else update_path
+        """
+        from distutils import version
+        global update_log
+        ver_file = "%s.ver" % package
+        if package == "res": ver_file = "./config/" + ver_file
+        if package == "lib": ver_file = "%s/.eagle/3party_lib/%s" % (os.environ['HOME'], ver_file)
+        try:
+            with open(ver_file, "r") as f:
+                local_ver_str = f.read()
+            local_ver_no = version.StrictVersion(_get_ver_no(local_ver_str))
+        except:
+            local_ver_no = version.StrictVersion("0.0.0")
+
+        newest_ver_no = version.StrictVersion("0.0.0")
+        updateto_item = ""
+        for item in files:
+            if item.endswith("%s.tar.gz" % package):
+                ver_no = version.StrictVersion(_get_ver_no(item))
+                if define_ver == "new":
+                    if ver_no > newest_ver_no:
+                        newest_ver_no, updateto_item = ver_no, item
+                else:
+                    if ver_no == version.StrictVersion(define_ver):
+                        newest_ver_no, updateto_item = ver_no, item
+
+        if define_ver == "new":
+            if newest_ver_no <= local_ver_no:
+                update_log += "%s无需更新\n" % package
+                return None
+        else:
+            if updateto_item == "":
+                update_log += "找不到%s版本的%s包\n" %(define_ver, package)
+                return None
+
+        print "检查到%s需要更新，更新文件为%s\n" % (package, updateto_item)
+        update_log += "更新了%s,从%s更新到%s\n" % (package, str(local_ver_no), str(newest_ver_no))
+        return cfg.get("update_ftp_path") + updateto_item
+
+    def _do_update(package, ver):
+        update_url = _check_update(package, ver)
+        if update_url:
+            install([package, update_url])
+
+    def _print_summary():
+        print "=" * 80
+        sys.stdout.write(update_log)
+
+    cwd = os.path.basename(os.getcwd())
+    print "当前的路径信息%s\n" %(cwd)
+
+    is_version_prop = 0
+    if len( argv ) == 1:
+        is_version_prop = re.match( r"(\d+)\.(\d+)\.(\d+)", argv[0], re.IGNORECASE )
+    print "当前第一个参数是否版本号:%s" %(is_version_prop)
+
+    if argv == [] or is_version_prop:
+        #若当前目录为platform或release，./eagle update默认自动更新
+        if cwd in ["platform"]:
+            update_target = "platform_all"
+        elif cwd in ["release"]:
+            update_target = "release_all"
+        else:
+            help(["update"])
+            return 0
+    else:
+        update_target = argv[0]
+
+    if update_target in ["lib", "res", "platform", "release", "platform_all", "release_all"]:
+        files = _get_ftp_filelist()
+        if not files: return 1
+
+    if len(argv) == 2:
+        update_ver = argv[1]
+    elif len(argv) == 1 and is_version_prop:
+        update_ver = argv[0]
+    else:
+        update_ver = "new"
+
+    if update_target == "platform_all":
+        if os.path.basename(os.getcwd()) != "platform":
+            print "platform"
+            return 1
+        _do_update("lib", update_ver)
+        _do_update("res", update_ver)
+        _do_update("platform", update_ver)
+        _print_summary()
+    elif update_target == "release_all":
+        if os.path.basename(os.getcwd()) != "release":
+            print "必须在release目录下更新"
+            return 1
+        _do_update("lib", update_ver)
+        _do_update("release", update_ver)
+        _do_update("res", update_ver)
+        _print_summary()
+    elif update_target == "lib":
+        if os.path.basename(os.getcwd()) != "release" or os.path.basename(os.getcwd()) != "platform":
+            print "必须在release 或者 platform目录 更新lib"
+        _do_update("lib", update_ver)
+        _print_summary()
+    elif update_target == "res":
+        if os.path.basename(os.getcwd()) != "release" or os.path.basename(os.getcwd()) != "platform":
+            print "必须在release 或者 platform目录 更新res"
+        _do_update("res", update_ver)
+        _print_summary()
+    elif update_target == "platform":
+        if os.path.basename(os.getcwd()) != "platform":
+            print "必须在platform目录 更新platform"
+        _do_update("platform", update_ver)
+        _print_summary()
+    elif update_target == "release":
+        if os.path.basename(os.getcwd()) != "release":
+            print "必须在release目录更新release"
+        _do_update("release", update_ver)
+        _print_summary()
+    else:
+        help(["update"])
+        return 0
+
+    try_to_gen_config()
+
+def run():
+    global cfg
+    try:
+        EAGLE_HOME = "%s/.eagle" % os.environ["HOME"]
+        sh("mkdir -pv %s" % EAGLE_HOME) #确保存在~/.eagle文件夹
+
+        default_conf = "%s/eagle.conf" % EAGLE_HOME
+        if not os.path.exists(default_conf):
+            if not os.path.exists("./example.eagle.conf"):
+                print "%s目录下缺少eagle.conf,也无法从example.eagle.conf复制!" % EAGLE_HOME
+                return 1
+            sh("cp ./example.eagle.conf %s/eagle.conf" % EAGLE_HOME)
+
+        #当前目录下的eagle.conf比EAGLE_HOME目录下的优先
+        if os.path.exists("./eagle.conf"):
+            default_conf = "eagle.conf"
+
+        parser = OptionParser(usage=u"./eagle %s [options]" % "|".join(cmds), add_help_option=False)
+        parser.set_defaults(run_mode=None,
+                            guard_mode=False,
+                            run_for_debug=False,
+                            ignore_error=False,
+                            config_file=default_conf)
+        parser.add_option("-h", "--help", help=u"显示这些帮助信息", action="callback", callback=usage)
+        parser.add_option("--dev", help=u"设置为开发模式", action="store_const", const=DEVEL_MODE, dest="run_mode")
+        parser.add_option("--dist", help=u"设置为产品模式", action="store_const", const=PRODUCT_MODE, dest="run_mode")
+        parser.add_option("--guard", help=u"以守护方式启动进程", action="store_true", dest="guard_mode")
+        parser.add_option("--restart", help=u"重启进程以便调试", action="store_true", dest="run_for_debug")
+        parser.add_option("-c", help=u"指定配置文件的位置", dest="config_file")
+        parser.add_option("-m", help=u"migrate update选项,升级(或回滚)到指定版本", dest="to_migration")
+        parser.add_option("-p", "--pause", help=u"migrate update选项,每个脚本暂停", action="store_true", dest="pause_migrate")
+        parser.add_option("--drop", help=u"migrate update选项,先删除数据库再执行migration,慎用!", action="store_true", dest="drop_before_migrate")
+        parser.add_option("-i", "--ignore-error", help=u"migrate update选项,忽略sql语法错误.", action="store_true", dest="ignore_error")
+        options, args = parser.parse_args()
+
+        cfg = FileConfig(options.config_file)
+        #if cfg.check_outdate("example.eagle.conf"):
+        #    print ("%s/eagle.conf可能已经过时，请用example.eagle.conf更新它!\n" % EAGLE_HOME) * random.randint(1,20)
+        cfg.put('config_file', options.config_file)
+        if options.run_mode:
+            cfg.update('run_mode', options.run_mode)
+        cfg.put('guard_mode', options.guard_mode)
+        cfg.put('run_for_debug', options.run_for_debug)
+        cfg.put('to_migration', options.to_migration)
+        cfg.put('pause_migrate', options.pause_migrate)
+        cfg.put('drop_before_migrate', options.drop_before_migrate)
+        cfg.put('ignore_sql_error', options.ignore_error)
+        cfg.put("show_sql_only", False)
+
+        if len(args) >= 1:
+            cmd = get_lazy_cmd(args[0])
+            if not cmd: return 1
+            if cmd != args[0]:
+                print "%s匹配成%s" % (args[0], cmd)
+            exec("%s(%s)" % (cmd, args[1:]))
+        else:
+            print "输入 %s -h 查看帮助." % sys.argv[0]
+    except KeyboardInterrupt:
+        print "用户中断操作！"
+    except SystemExit, error_no:
+        return error_no
+    except Exception, e:
+        print e
+
+    return 1
+
+if __name__ == "__main__":
+    sys.exit(run())

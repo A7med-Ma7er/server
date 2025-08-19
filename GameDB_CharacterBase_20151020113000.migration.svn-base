@@ -1,0 +1,33 @@
+SQL_UP = u"""
+CREATE TABLE CharacterBase(
+	acctype INT(10) UNSIGNED NOT NULL,
+	accid INT(10) UNSIGNED NOT NULL,
+	accname VARCHAR(255),
+	acckey VARCHAR(255),
+	charid INT(10) UNSIGNED NOT NULL,
+	charname VARCHAR(255),
+	init BOOL,
+	deleted BOOL,
+	createtime INT(10) UNSIGNED NOT NULL,
+	savetime INT(10) UNSIGNED NOT NULL,
+	offlinetime INT(10) UNSIGNED NOT NULL,
+	face INT(10) UNSIGNED NOT NULL,
+	level INT(10) UNSIGNED NOT NULL,
+	exp INT(10) UNSIGNED NOT NULL,
+	coin INT(10) UNSIGNED NOT NULL,
+	diamond INT(10) UNSIGNED NOT NULL,
+	pkvalue BIGINT(20) UNSIGNED NOT NULL,
+	zerocleartime INT(10) UNSIGNED NOT NULL,
+	forbidtime INT(10) UNSIGNED NOT NULL,
+	forbidspeaktime INT(10) UNSIGNED NOT NULL,
+	version INT(10) UNSIGNED NOT NULL,
+	fromdb INT(10) UNSIGNED NOT NULL,
+	binarydata BLOB(65535),
+	PRIMARY KEY IDKey (charid),
+	KEY ACCKEY (acctype,accid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE CharacterBase;
+"""

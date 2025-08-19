@@ -1,0 +1,7 @@
+SQL_UP = u"""
+ALTER TABLE GuildBase ADD pkValueLimit INT(10) UNSIGNED NOT NULL;
+"""
+
+SQL_DOWN = u"""
+ALTER TABLE GuildBase DROP pkValueLimit;
+"""

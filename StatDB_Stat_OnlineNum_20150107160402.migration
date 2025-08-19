@@ -1,0 +1,12 @@
+SQL_UP = u"""
+CREATE TABLE Stat_OnlineNum(
+	time VARCHAR(255),
+	zoneid INT(10) UNSIGNED NOT NULL,
+	onlinenum INT(10) UNSIGNED NOT NULL,
+	PRIMARY KEY IDKey (time,zoneid)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE Stat_OnlineNum;
+"""

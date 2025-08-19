@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Eagle>
+<Global>
+    <superserver port="30000">127.0.0.1</superserver>
+    <broadcastsize>500</broadcastsize>
+    <ifname>eth0</ifname>
+    <configdir>./Config/</configdir>
+    <pbddir>./ServerPbd/TableData</pbddir>
+    <xmlpbddir>./ServerPbd/XmlData</xmlpbddir>
+	<gm_mode>true</gm_mode>
+    <validtime>true</validtime>
+    <use_nameserver>true</use_nameserver>
+	<log>debug</log>
+    <serverStartDay>2017-11-10 0:0:0</serverStartDay>
+    <redisIndexIP>10.180.41.13</redisIndexIP>
+    <redisIndexPort>6381</redisIndexPort>
+	<redisclient>1:10.180.41.13:6380:1;2:10.180.41.13:6381:2</redisclient>
+	<redispass>Ax++[D.#zFrDjgKQ</redispass>
+	<transurl>http://124.250.42.211/Google/Cloud/wgame-google-api.php</transurl>
+    <!--接连接googleapi，翻墙要使用transproxy:127.0.0.1:1080,否则填NULL，transurl则无效 如果使用wgame-google-api.php,则transproxy必须为空-->
+	<PayOrderMd5Key>63f0ec2d7cfa025f87a2bbd530f9ca12</PayOrderMd5Key>
+	<GooglePublicKey>MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlAj6fyC7Dq0NKXHD0d7s1V5Jpr84w1eKbCUe4tR+2ZSPtaxhgE26uMqUwBvcVx0dW6ZXPxglDN40vx9C+70iEkEsFD40ddAa+BzC7ympTuAICy/X8dOpKn3q2Hp55rN0M368NA1b7AmPPjEDZDcGXzYGIQFcqTEzB5UOLFlkD50ITOUm+D+FRVAnPq0dY61Myl4sDNHPEb+9cVCWSafmntpBz+cuPfhgaKQkviY8PEMAPL/9OvkESDVQof3QJ1xZr2k4ZiA3CwxzLMs5EvOmrVBw16/hiGGQ7+9FK7Ch4AR+YwgWQdfDu0Glo928KGM2gw24efI6itHL4x9q7x0+OQIDAQAB</GooglePublicKey>
+	<HuaweiPublicKey>MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNOaJ0rigqUr9+ULZaZn2FjvHb4+hHs7u1GykTH+kLaM6dDq2f41bIo63apQr8QcgZTjNjnuH/dqs+hmaPCUAwq3fJbCKxqcdtbbKUerexL1wUWQSyhdzraNvd391kEc/kIAqBMJPIg4kDvzsKGyDLGLQc7zd+NbxNOJpAsLSafF5zkbDpzkvcqdOVdHoQ3miQ4gpW4QskRpER2+xHkcKQnPYVQvAX3qT9l36N7vDHpei59idDEzBVe7Df5r1VzlAG/OiNJNjm15M4aLPsS2cJEffzMsSNZBzZ3MsZX28dsuT0PGeogeQbj2nNpO1tnN/z6UFUpLC1NsTMhsidURxQIDAQAB</HuaweiPublicKey>
+	<HuaweiPrivateKey>MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDI05onSuKCpSv35QtlpmfYWO8dvj6Eezu7UbKRMf6Qtozp0OrZ/jVsijrdqlCvxByBlOM2Oe4f92qz6GZo8JQDCrd8lsIrGpx21tspR6t7EvXBRZBLKF3Oto293f3WQRz+QgCoEwk8iDiQO/OwobIMsYtBzvN341vE04mkCwtJp8XnORsOnOS9yp05V0ehDeaJDiClbhCyRGkRHb7EeRwpCc9hVC8BfepP2Xfo3u8Mel6Ln2J0MTMFV7sN/mvVXOUAb86I0k2ObXkzhos+xLZwkR9/MyxI1kHNncyxlfbx2y5PQ8Z6iB5BuPac2k7W2c3/PpQVSksLU2xMyGyJ1RHFAgMBAAECggEAAX1AOWZew6VB7DawnPJc9sfCDjBo+kaHrN3wOw9p2dzgsqMv+qnd744e3aHzszn7FCLshGxtjaMiEW95wvF1x4f+0Fe13Of3nRH+0hGL/f+n/uTrKwODnpLP/kZ1KW+WLXSD2Ls7aE2CTd+D8R1h2qI+bCCCwbLX7V+8N5E1Zjhq6FVsbDLfZL/nq9Ya1yoYIDwTSlW1S0bFirGv9yg2G1wSnbJNVGVTRb/hyZIkik38jsEkupyHKLohRkHdgJ7SQ1XshYjdxaktr1Owc6XNv+wUqx8WZ+MbRLvABHQU3WauS9XUHBP4Hn/2ONkI4/n8q60M+WIwgUCAQA6bUTOUSQKBgQD50cGa3TRiLWDDjvVa5chnNRXIhNx//Yu4T6GiR/cEdbyyoFqOayh+O3IJIq/5QTtoKhnC5fILo0vXFI+XhqMnY9H4ncrpJkw3EQ+MDvzdOqx6l7zWtqdVS8xCNsTTzZulLUNaxuHtz5T92aBIkAYgdd+JpGiMOLL6gvks6SkabwKBgQDNy4wsHLWhUIUE/sfB7EsjgBxp0hVysHkMsQjuvbtegr7nJaCXyqngc6oMCJcyqUGrMTfvwCcLVLm3hgBWr3oQwWP36kw8GJ3qbZfFl/FAmQLibWKRG2UY1p2GKJeN0ULbCKbnAp61/jaN7s/CUfP+1V6yxZoqkuMTu6mm+LGBCwKBgQCIwU6enCEk7XpfE0805z0BYon+Lt0WI5Hs34q373VFt74IeseX1wlfsOMIJTj31cHTj9hyXLZXsJi/sL26UTXXRkmXM6n0X8axDmHYZgv+fzQUGCSD1ZFcnBXA2YJ9/7wIe/K3KtBbApupKw0XK+BuvJgWHS4uNIulnzUQZMLfeQKBgC1lnnlIqAR6160fav9rWbPuGdZ6IoMXTMyw7PCFaCTUILqqwT9a1JiPy042QuxJDBRwmg9ISxSjzwgeBksZEItLrfrNc526LHO/U0CiYPTIDCvYx2qNKYMOLNegcrY1GFNrGC5TlKE+/9fVe305SOLJPMeg8X48wtzig+0yZS27AoGBAIK35hyN4I9vWHFlGnRcldYmRZNtFwCH7lfReMybaQatYL1usKXLVRXUMBNZgPwiDHuwfbAQvIZxVbmbM2KbshhVlbwCtgo6mJ9MYqlNHf/wsaXFmHn72DyCSmWf8NoENeeavQETVD9cLaQ2LLCs33nHxMX06uPFvbcJiYAeqhR4</HuaweiPrivateKey>
+	<EfunAppKey>84C1A9FEEA92A2DFD5340C67246820C0</EfunAppKey>
+	<stat_mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_stat</stat_mysql>
+</Global>
+<InfoServer>
+    <maxConnect>512</maxConnect>
+    <port>9101</port>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+</InfoServer>
+<StatServer>
+    <maxConnect>512</maxConnect>
+    <clientConnPerThread>2</clientConnPerThread>
+    <port>9701</port>
+    <logpath>/root/log/</logpath>
+    <statlogpath>/root/log/</statlogpath>
+    <platformlogpath>/root/log//platformlog/</platformlogpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_stat</mysql>
+    <InfoServerIP>10.180.41.13</InfoServerIP>
+    <InfoServerPort>9101</InfoServerPort>
+</StatServer>
+<NameServer>
+    <maxConnect>512</maxConnect>
+    <port>9201</port>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+</NameServer>
+<SupportServer>
+    <maxConnect>512</maxConnect>
+    <clientMaxConnect>512</clientMaxConnect>
+    <clientConnPerThread>2</clientConnPerThread>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+    <port>9301</port>
+    <clientport>7301</clientport>
+    <httpport>7302</httpport>
+    <ServerIP>10.180.41.13</ServerIP>
+    <InfoServerIP>10.180.41.13</InfoServerIP>
+    <InfoServerPort>9101</InfoServerPort>
+    <verifyversion>false</verifyversion>
+</SupportServer>
+<BillServer>
+    <maxConnect>5120</maxConnect>
+    <superMaxConnect>5120</superMaxConnect>
+    <clientConnPerThread>2</clientConnPerThread>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+    <port>9501</port>
+    <httpport>7502</httpport>
+    <InfoServerIP>10.180.41.13</InfoServerIP>
+    <InfoServerPort>9101</InfoServerPort>
+    <kunlunPayIP>115.159.50.165</kunlunPayIP>
+    <kunlunPayKey>16fdcda3834f2c32d45b2f2b1c4d62db</kunlunPayKey>
+    <midasGetBalanceUrl>https://ysdktest.qq.com/mpay/get_balance_m</midasGetBalanceUrl>
+    <midasPayUrl>https://ysdktest.qq.com/mpay/pay_m</midasPayUrl>
+    <midasPresentUrl>https://ysdktest.qq.com/mpay/present_m</midasPresentUrl>
+    <midasAppId>1106134107</midasAppId>
+    <midasAppKey>6YWg9s0AyWaiFL9A7QOvnB4uKWtSE4Sf</midasAppKey>
+    <AlipayAppId>2019021463212885</AlipayAppId>
+    <AlipayPublicKey>MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtiYKEP4CmMGpnYM5OaK4sR8Qhvb4UM2W/yqODQ8g44WoJuDzRQ/4MnB3DZv4YhLbYyfucx66IgCjUy1ETw191M0PnkptVbb+o+DwkFEso6+E32jqFi5pi4dISw/y83wx6R87vDw/e0oNHF7dmmwXaH9bDFt3ZuNWm5mZob6vyMFPJGAtQUgr+obzoqSiXZbcZGBbpHhxIC/i5mIdr673gaB6vLYT1Pw7qaYNHCylYfObAbco+nDuvtB1HoAuBZQfAbcFwN8CE3Iv021QSW64Otuuonxu6FYBsMBchL294mscx9ueYPlnugVdD68hWzNvyX4gFZdGvRgTCVdM1fv9vwIDAQAB</AlipayPublicKey>    
+    <WeixinPrepayUrl>https://api.mch.weixin.qq.com/pay/unifiedorder</WeixinPrepayUrl>
+    <WeixinNotifyUrl>http://54.69.69.234:7502/pay/wx/deliver</WeixinNotifyUrl>
+    <WeixinAppId>wx2b761fa59b12d8d0</WeixinAppId>
+    <WeixinMchId>1526159611</WeixinMchId>
+    <WeixinApiKey>07FF206D7957BAD2C2B67A816DF6C13C</WeixinApiKey>
+    <ApplePayUrl>https://buy.itunes.apple.com/verifyReceipt</ApplePayUrl>
+</BillServer>
+<MPServer>
+    <superMaxConnect>5120</superMaxConnect>
+    <clientConnPerThread>2</clientConnPerThread>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+    <port>9601</port>
+    <InfoServerIP>10.180.41.13</InfoServerIP>
+    <InfoServerPort>9101</InfoServerPort>
+    <PlayerReturnGiftCfg>1:6:148|2:6,10:150|3:6,10,15:149</PlayerReturnGiftCfg>
+</MPServer>
+<LoginServer>
+    <verifyTheadCount>20</verifyTheadCount>
+    <maxConnect>5120</maxConnect>
+    <verifyTimeout>180</verifyTimeout>
+    <superMaxConnect>512</superMaxConnect>
+    <clientConnPerThread>2</clientConnPerThread>
+    <logpath>/root/log/</logpath>
+    <mysql>mysql://weygame:PQbwA5Wa@127.0.0.1:3306/wy_plat</mysql>
+    <port>9401</port>
+    <loginport>7401</loginport>
+    <InfoServerIP>10.180.41.13</InfoServerIP>
+    <InfoServerPort>9101</InfoServerPort>
+    <SupportServerIP>10.180.41.13</SupportServerIP>
+    <SupportServerPort>9301</SupportServerPort>
+    <AccountDataCacheNum>500000</AccountDataCacheNum>
+	<AccountListCacheNum>500000</AccountListCacheNum>
+	<AccountBindListCacheNum>500000</AccountBindListCacheNum>
+	<AccTokenVerifyTimeout>5000</AccTokenVerifyTimeout>
+    <KunLunChinaVerifyUrl>http://sdk.api.kunlun.com/verifyklsso.php</KunLunChinaVerifyUrl>
+	<compress>true</compress>
+	<iosUpdateHref>https://itunes.apple.com/cn/app/id1378857105?mt=8</iosUpdateHref>
+	<adrUpdateHref>https://tf.91muzhi.com/subpage/kdzz.html</adrUpdateHref>
+	<QQLoginVerifyUrl>http://ysdktest.qq.com/auth/qq_check_token</QQLoginVerifyUrl>
+	<QQAppId>1106134107</QQAppId>
+	<QQAppKey>TwuMxVW3cJQ7bK2J</QQAppKey>
+	<WXLoginVerifyUrl>http://ysdktest.qq.com/auth/wx_check_token</WXLoginVerifyUrl>
+	<WXAppId>wx48e40ee4868a90ea</WXAppId>
+	<WXAppKey>dd669f8d2b06ee74708af060f130980b</WXAppKey>
+</LoginServer>
+</Eagle>

@@ -1,0 +1,7 @@
+SQL_UP = u"""
+ALTER TABLE Stat_Login ADD acctype INT(10) UNSIGNED NOT NULL;
+"""
+
+SQL_DOWN = u"""
+ALTER TABLE Stat_Login DROP acctype;
+"""

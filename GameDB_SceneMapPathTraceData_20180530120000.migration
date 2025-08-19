@@ -1,0 +1,36 @@
+SQL_UP = u"""
+CREATE TABLE SceneMapPathTraceData(
+	pathId INT(10) UNSIGNED NOT NULL,
+	pathType INT(10) UNSIGNED NOT NULL,
+	charId INT(10) UNSIGNED NOT NULL,
+	charName VARCHAR(255),
+	targetUid INT(10) UNSIGNED NOT NULL,
+	targetType INT(10) UNSIGNED NOT NULL,
+	targetCharId INT(10) UNSIGNED NOT NULL,
+	targetPosX INT(10) UNSIGNED NOT NULL,
+	targetPosY INT(10) UNSIGNED NOT NULL,
+	setoutArmy VARCHAR(255),
+	speed INT(10) UNSIGNED NOT NULL,
+	pathTime INT(10) UNSIGNED NOT NULL,
+	startTime INT(10) UNSIGNED NOT NULL,
+	resTake VARCHAR(255),
+	gatherArmy VARCHAR(255),
+	resTrans VARCHAR(255),
+	cancelTime INT(10) UNSIGNED NOT NULL,
+	arriveTime INT(10) UNSIGNED NOT NULL,
+	battleTime INT(10) UNSIGNED NOT NULL,
+	battleReturnTime INT(10) UNSIGNED NOT NULL,
+	battleWinTeam INT(10) UNSIGNED NOT NULL,
+	battleArmy VARCHAR(255),
+	backTime INT(10) UNSIGNED NOT NULL,
+	backArmy VARCHAR(255),
+	log VARCHAR(255),
+	updateTime INT(10) UNSIGNED NOT NULL,
+	needSave BOOL,
+	PRIMARY KEY IDKey (pathId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE SceneMapPathTraceData;
+"""

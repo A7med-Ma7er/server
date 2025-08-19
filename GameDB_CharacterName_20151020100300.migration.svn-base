@@ -1,0 +1,13 @@
+SQL_UP = u"""
+CREATE TABLE CharacterName(
+	charname VARCHAR(255),
+	charid INT(10) UNSIGNED NOT NULL,
+	time INT(10) UNSIGNED NOT NULL,
+	PRIMARY KEY NameKey (charname),
+	KEY CharIDKey (charid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE CharacterName;
+"""

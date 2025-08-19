@@ -1,0 +1,13 @@
+SQL_UP = u"""
+CREATE TABLE Stat_UserHero(
+	charid INT(10) UNSIGNED NOT NULL,
+	heroid INT(10) UNSIGNED NOT NULL,
+	herolevel INT(10) UNSIGNED NOT NULL,
+	herostar INT(10) UNSIGNED NOT NULL,
+	PRIMARY KEY CharIDKey (charid,heroid)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+"""
+
+SQL_DOWN = u"""
+DROP TABLE Stat_UserHero;
+"""
